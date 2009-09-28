@@ -11,6 +11,7 @@ requires      'KiokuDB'          => '0.24';
 requires      'Cache::Memcached' => '0';
 test_requires 'Test::More'       => '0.94';
 test_requires 'Test::MockObject' => '1.09';
+test_requires 'IO::Socket::INET' => '0';
 test_requires 'MooseX::AttributeHelpers' => '0.22';
 
 WriteAll;

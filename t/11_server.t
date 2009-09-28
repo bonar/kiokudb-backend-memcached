@@ -2,61 +2,54 @@
 use strict;
 use warnings;
 
-use Test::More tests => 26;
+use Test::More;
+use Cache::Memcached;
+use IO::Socket::INET;
 
-use_ok('Test::MockObject');
-use_ok('Cache::Memcached');
-use_ok('KiokuDB');
-use_ok('KiokuDB::TypeMap::Entry::Naive');
+my $serverport = 'localhost:11211';
+my $msock = IO::Socket::INET->new(
+    PeerAddr => $serverport,
+    Timeout  => 3,
+);
+if (!$msock) {
+    plan skip_all => "No memcached instance running at $serverport\n";
+    exit 0;
+} else {
+    plan tests => 22;
+}
 
-{ note('create memcached mock object for tests without server');
-    my $mock = Test::MockObject->new();
-    our (%mock_attr);
-    $mock->mock('mocked', sub { 1 });
-    $mock->mock('set', sub {
-        $mock_attr{$_[1]} = $_[2];
-    });
-    $mock->mock('get', sub {
-        return unless defined $mock_attr{$_[1]};
-        return $mock_attr{$_[1]};
-    });
-    $mock->mock('delete', sub {
-        delete $mock_attr{$_[1]};
-    });
-    $mock->mock('exists', sub {
-        return defined $mock_attr{$_[1]} ? 1 : 0;
-    });
-    $mock->set_isa('Cache::Memcached');
-    $mock->fake_new('Cache::Memcached');
+sub _make_key {
+    my $key = shift;
+    return sprintf(
+        'KiokuDB::Backend::Memcached:Test::%d:%s', $$, $key);
+}
 
-    my $cache = Cache::Memcached->new();
-    isa_ok($cache, 'Cache::Memcached');
-    is($cache->mocked, 1, 'mocked flag');
-    $cache->set('foo', 'bar');
-    is($cache->get('foo'), 'bar', 'mock: set and get');
-    $cache->delete('foo');
-    ok(!$cache->get('foo'), 'mock: delete');
+{ note('memcached basics'); 
+    my $memd = Cache::Memcached->new({servers => [$serverport]});
+    ok($memd, 'memcached instance');
+    isa_ok($memd, 'Cache::Memcached');
+
+    my $key1 = _make_key('key1');
+    ok(!$memd->get($key1), 'key1 empty');
+    $memd->set($key1, 'val1');
+    ok($memd->get($key1), 'after set, key1 not empty');
+    $memd->delete($key1);
+    ok(!$memd->get($key1), 'after delete, key1 empty');
 }
 
 my ($db);
-{ note('backend object and db object');
+{ note('Backend::Memcached on memcached');
+
+    use_ok('KiokuDB');
     use_ok('KiokuDB::Backend::Memcached');
+    use_ok('KiokuDB::TypeMap::Entry::Naive');
+
     my $backend = KiokuDB::Backend::Memcached->new(
-        servers => ["10.0.0.17:11211"],
-        debug   => 0,
-        compress_threshold => 10_000,
+        servers => [$serverport],
     );
-    ok($backend, 'backend: response');
     isa_ok($backend, 'KiokuDB::Backend::Memcached');
-    
     my $cache = $backend->memcached;
     isa_ok($cache, 'Cache::Memcached');
-
-    # type constraints
-    undef $@; eval { $backend->memcached({}); };
-    ok($@, 'invalid: plain hashref');
-    undef $@; eval { $backend->memcached($backend); };
-    ok($@, 'invalid: not Cache::Memcached');
 
     $db = KiokuDB->new(
         backend => $backend,
@@ -69,12 +62,9 @@ my ($db);
     isa_ok($db, 'KiokuDB');
 }
 
-# practical tests:
-#   1. create NoteList object
-#   2. create Note objects and push them to the NoteList object
-#   3. store NoteList object
-#   4. check result (data in mocked memcached object)
-{ # NoteList is a Collection of Notes
+# TODO: tests below is copied from t/10_basic_mock.t.
+# these lines must be structured and shared.
+{
     package NoteList;
     use Moose;
     use MooseX::AttributeHelpers;
@@ -135,7 +125,6 @@ my ($uuid);
     $db->live_objects->clear();
     ok(!$db->lookup($uuid), 'key deleted');
 }
-
 
 
 
