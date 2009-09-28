@@ -66,6 +66,42 @@ __END__
 
 KiokuDB::Backend::Memcached - memcached backend
 
+=head1 SYNOPSIS
+
+    my $backend = KiokuDB::Backend::Memcached->new(
+        servers => ["localhost:11211"],
+        debug   => 0,
+        compress_threshold => 10_000,
+    );
+    $db = KiokuDB->new(backend => $backend);
+
+=head1 DESCRIPTION
+
+This backend provides memcached based backend using L<Cache::Memcached>.
+Note that this backend does NOT support transaction for now.
+
+and this module is alpha version. don't use this module 
+in production softwares.
+
+=head1 Constructor options
+
+you can specify same options as Cache::Memcached constructor to
+KiokuDB::Backend::Memcached#new. such as servers, debug. see whole 
+options at L<Cache::Memcached>.
+
+you can also specify serializer.
+
+    my $backend = KiokuDB::Backend::Memcached->new(
+        servers    => ["localhost:11211"],
+        serializer => "yaml",
+    );
+
+"storable" is the default.
+
+=head1 VERSION CONTROL
+
+L<http://github.com/bonar/kiokudb-backend-memcached>
+
 =head1 AUTHOR
 
 nakano kyohei (bonar), bonar at cpan.org
