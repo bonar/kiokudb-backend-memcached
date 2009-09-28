@@ -2,9 +2,10 @@
 use strict;
 use warnings;
 
-use Test::More tests => 22;
+use Test::More tests => 26;
 
 use_ok('Test::MockObject');
+use_ok('Cache::Memcached');
 use_ok('KiokuDB');
 use_ok('KiokuDB::TypeMap::Entry::Naive');
 
@@ -12,11 +13,19 @@ use_ok('KiokuDB::TypeMap::Entry::Naive');
     my $mock = Test::MockObject->new();
     our (%mock_attr);
     $mock->mock('mocked', sub { 1 });
-    $mock->mock('set', sub { $mock_attr{$_[1]} = $_[2]; });
+    $mock->mock('set', sub {
+        $mock_attr{$_[1]} = $_[2];
+    });
     $mock->mock('get', sub {
         return unless defined $mock_attr{$_[1]};
-        return $mock_attr{$_[1]}; });
-    $mock->mock('delete', sub { delete $mock_attr{$_[1]}; });
+        return $mock_attr{$_[1]};
+    });
+    $mock->mock('delete', sub {
+        delete $mock_attr{$_[1]};
+    });
+    $mock->mock('exists', sub {
+        return defined $mock_attr{$_[1]} ? 1 : 0;
+    });
     $mock->set_isa('Cache::Memcached');
     $mock->fake_new('Cache::Memcached');
 
@@ -93,8 +102,7 @@ my ($db);
 }
 
 my ($uuid);
-{
-    # setup and store objects
+{ # setup and store objects
     my $notelist = NoteList->new();
     isa_ok($notelist, 'NoteList');
 
@@ -110,17 +118,22 @@ my ($uuid);
     my $scope = $db->new_scope;
     $uuid = $db->store($notelist);
     ok($uuid, "uuid:returned [$uuid]");
-
+    ok($db->exists($uuid), 'key exists');
+    
+    $db->live_objects->clear();
+    ok($db->exists($uuid), 'key exists after live_object cleared');
 }
-
-{
-    # restore object
+{ # restore object
     my $scope = $db->new_scope;
     my $notelist = $db->lookup($uuid);
     isa_ok($notelist, 'NoteList');
     my $notes = $notelist->notes;
     is(ref($notes), 'ARRAY', '(retored) notes is an arrayref');
     is(scalar(@$notes), 3, '(restore) push 3, and contains 3');
+
+    $db->delete($uuid);
+    $db->live_objects->clear();
+    ok(!$db->lookup($uuid), 'key deleted');
 }
 
 

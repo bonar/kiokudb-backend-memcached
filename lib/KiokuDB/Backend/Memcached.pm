@@ -2,7 +2,6 @@
 package KiokuDB::Backend::Memcached;
 use Moose;
 
-use Carp qw/croak/;
 use Cache::Memcached;
 use namespace::clean -except => 'meta';
 
@@ -29,9 +28,9 @@ sub BUILDARGS {
 }
 
 sub get {
-    my ($self, $uuid) = @_;
-    return $self->serializer->deserialize(
-        $self->memcached->get($uuid));
+    my ($self, @ids) = @_;
+    return map { $self->serializer->deserialize(
+        $self->memcached->get($_)) } @ids;
 }
 
 sub insert {
@@ -41,13 +40,21 @@ sub insert {
         my $val = $self->serializer->serialize($entry);
         $self->memcached->set($key, $val);
     }
+    return;
 }
 
 sub delete {
+    my ($self, @ids_or_entries) = @_;
+    my @uids = map { ref($_) ? $_->id : $_ } @ids_or_entries;
+    foreach my $uid (@uids) {
+        $self->memcached->delete($uid)
+    }
+    return;
 }
 
 sub exists {
-
+    my ($self, @uids) = @_;
+    return map { $self->memcached->get($_) } @uids;
 }
 
 __PACKAGE__->meta->make_immutable;
